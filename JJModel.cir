@@ -1,0 +1,96 @@
+*Constants
+.options temp = -269
+.options TNOM = -269
+
+.param piphi0 = 3.0385406e15  ; 2*pi/flux quantum [Wb]
+.param pijj = 3.141592  ; pi for phase shift
+.param KB = 1.38066e-23
+
+.param Vg = 2.6m           ; Gap voltage [V]
+.param ic0 = 100u          ; critical current per unit area [A]
+.param cj0 = 0.07p           ; capacitance per unit area [F]
+.param RNorm = 16           ; Normal resistance [ohm]
+.param Rsub = 160           ; Sub-gap resistance [ohm]
+.param delta = 0.1m           ; Sharpness of subgap-to-ohmic transition
+
+.subckt jj_rcsj n1 n2 area=1 phase_shift=0
+
+.param icrit = {area * ic0}
+.param cj = {area * cj0}
+
+Gphi 0 phi VALUE = {piphi0 * V(n1,n2)}
+Cphi phi 0 1
+Rleak phi 0 1k
+
+Bjj n1 n2 I = {icrit * sin(V(phi) + phase_shift)}
+Cjj n1 n2 {cj}
+
+* This is the fast implementation, use it in SFQ circuits
+*Rjj n1 n2 {RNorm}
+
+* This is better approximation for quasi-particle current. Use it in analog circuits
+Bqp n1 n2 I = { V(n1,n2) / (
++ Rsub + 0.5*(RNorm - Rsub) * ( (abs(V(n1,n2)) - (Vg - delta)) / delta + sgn(abs(V(n1,n2)) 
++ - (Vg - delta)) ) * (1 - sgn(abs(V(n1,n2)) - (Vg + delta)))/2
++ + (RNorm - Rsub) * (1 + sgn(abs(V(n1,n2)) - (Vg + delta)))/2 ) }
+.ends jj_rcsj
+
+.subckt rthermal n1 n2 rval=1
+VNoiw n3 0 DC 0 TRNOISE(1 0.1ps 0 0)
+Rthermal1 n3 0 1
+Rthermal2 n1 n2 {rval}
+B1 n1 n2 I = v(n3) * sqrt(1e13 * 4 * KB * 4.2 / {rval})
+.ends
+
+.subckt JTL n1 n5 n99
+L1      n1 n2     0.6p
+Lloop2  n2 n3     1.5p
+Lloop3  n3 n4     1.5p
+L4      n4 n5     2p
+XJ1     n2 n101   jj_rcsj area=3 phase_shift=0
+RBJTL1  n2 n101   3.67
+LJ1     n101 0    0.3p
+XJ2     n4 n102   jj_rcsj area=3 phase_shift=0
+RBJTL2  n4 n102   3.67
+LJ2     n102 0    0.3p
+RJTL1   n99 n3    5.55
+.ends JTL
+
+.subckt SINK n1 n99
+L1    n1 n2     0.6p
+L2    n2 n4     1.6p
+XJ1   n2 n101   jj_rcsj area=3 phase_shift=0
+RB1   n2 n101   3.67
+LJ1   n101 0    0.3p
+R1    n4 0      11
+R2    n99 n2    11
+
+.ends SINK
+
+* Main Circuit
+VBIAS n99 0 PWL(0p 0 10p 2.5m)
+Vin n10 0 pulse(0 1.033m 20p 1p 1p 1p 50p)
+
+* Josephson Transmission Line (JTL) stages
+XJTL1  n10 n50 n99 JTL
+XJTL2  n50 n51 n99 JTL
+XJTL3  n51 n52 n99 JTL
+XJTL4  n52 n53 n99 JTL
+XJTL5  n53 n54 n99 JTL
+XJTL6  n54 n55 n99 JTL
+XJTL7  n55 n56 n99 JTL
+XJTL8  n56 n57 n99 JTL
+XJTL9  n57 n58 n99 JTL
+XJTL10 n58 n59 n99 JTL
+XSINK n59 n99 SINK
+
+* Simulation Control 
+.TRAN 0.1ps 1000ps 10ps uic noise
+.control
+run
+
+wrdata JJOut.dat v(n10) v(XJTL5.n2, XJTL5.n101) v(XSINK.n2, XSINK.n101)
+quit
+
+.endc
+.END
