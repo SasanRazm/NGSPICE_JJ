@@ -2,12 +2,6 @@ import numpy as np
 import RunNGSPICE as RNG
 import plotWaveform as PLW
 
-# Main netlist file detials 
-# AddNoise = 1
-# OrgNetlist = 'JJModel.cir'
-# Out_file_path = 'JJOut.dat'
-# dsets = [0,1,3,5]
-
 AddNoise = 0
 OrgNetlist = 'PI_AND_HighJc.cir'
 Out_file_path = 'PiOut.dat'
