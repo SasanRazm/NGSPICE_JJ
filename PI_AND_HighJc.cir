@@ -1,0 +1,177 @@
+*Constants
+.options temp = -269
+.options TNOM = -269
+
+.param piphi0 = 3.0385406e15  ; 2*pi/flux quantum [Wb]
+.param pijj = 3.141592  ; pi for phase shift
+.param KB = 1.38066e-23
+
+.subckt jj_0 n1 n2 area=1 phase_shift=0
+
+.param Vg = 2.8m           ; Gap voltage [V]
+.param ic0 = 600u          ; critical current per unit area [A]
+.param cj0 = 0.07p           ; capacitance per unit area [F]
+.param RNorm = 14           ; Normal resistance [ohm]
+.param Rsub = 120           ; Sub-gap resistance [ohm]
+.param delta = 0.1m           ; Sharpness of subgap-to-ohmic transition
+
+.param icrit = {area * ic0}
+.param cj = {area * cj0}
+
+Gphi 0 phi VALUE = {piphi0 * V(n1,n2)}
+Cphi phi 0 1
+Rleak phi 0 1k
+
+Bjj n1 n2 I = {icrit * sin(V(phi) + phase_shift)}
+Cjj n1 n2 {cj}
+
+* This is the fast implementation, use it in SFQ circuits
+*Rjj n1 n2 {RNorm}
+
+* This is better approximation for quasi-particle current. Use it in analog circuits
+Bqp n1 n2 I = { V(n1,n2) / (
++ Rsub + 0.5*(RNorm - Rsub) * ( (abs(V(n1,n2)) - (Vg - delta)) / delta + sgn(abs(V(n1,n2)) 
++ - (Vg - delta)) ) * (1 - sgn(abs(V(n1,n2)) - (Vg + delta)))/2
++ + (RNorm - Rsub) * (1 + sgn(abs(V(n1,n2)) - (Vg + delta)))/2 ) }
+.ends jj_0
+
+.subckt jj_pi n1 n2 area=1 phase_shift=pijj
+
+.param Vg = 2.8m           ; Gap voltage [V]
+.param ic0 = 1m          ; critical current per unit area [A]
+.param cj0 = 0.04p           ; capacitance per unit area [F]
+.param RNorm = 8           ; Normal resistance [ohm]
+.param Rsub = 20           ; Sub-gap resistance [ohm]
+.param delta = 0.1m           ; Sharpness of subgap-to-ohmic transition
+
+.param icrit = {area * ic0}
+.param cj = {area * cj0}
+
+Gphi 0 phi VALUE = {piphi0 * V(n1,n2)}
+Cphi phi 0 1
+Rleak phi 0 1k
+
+Bjj n1 n2 I = {icrit * sin(V(phi) + phase_shift)}
+Cjj n1 n2 {cj}
+
+* This is the fast implementation, use it in SFQ circuits
+*Rjj n1 n2 {RNorm}
+
+* This is better approximation for quasi-particle current. Use it in analog circuits
+Bqp n1 n2 I = { V(n1,n2) / (
++ Rsub + 0.5*(RNorm - Rsub) * ( (abs(V(n1,n2)) - (Vg - delta)) / delta + sgn(abs(V(n1,n2)) 
++ - (Vg - delta)) ) * (1 - sgn(abs(V(n1,n2)) - (Vg + delta)))/2
++ + (RNorm - Rsub) * (1 + sgn(abs(V(n1,n2)) - (Vg + delta)))/2 ) }
+.ends jj_pi
+
+.subckt rthermal n1 n2 rval=1
+VNoiw n3 0 DC 0 TRNOISE(1 0.1ps 0 0)
+Rthermal1 n3 0 1
+Rthermal2 n1 n2 {rval}
+B1 n1 n2 I = v(n3) * sqrt(1e13 * 4 * KB * 4.2 / {rval})
+.ends
+
+.subckt JTL 1 9
+L1 1 2 0.1p
+
+XB1 2 12 jj_pi area=0.03 phase_shift=pijj
+Lpi 12 0 0.3p
+
+LP2 2 3 0.15p
+XB2 3 4 jj_0 area=0.07 phase_shift=0
+LP3 4 5 0.15p
+XB3 5 6 jj_0 area=0.07 phase_shift=0
+LP4 6 7 0.15p
+XB4 7 8 jj_0 area=0.07 phase_shift=0
+LP5 8 9 0.15p
+
+IB1 0 2 pwl(0 0 10p 15u)
+.ends
+
+.SUBCKT DCSFQ 1 13
+L1 2 3 0.1p
+RINON 1 2 50
+LGND 2 0  1p
+
+XBIN 3 4 jj_0 area=0.08 phase_shift=0
+LPIN 4 5 0.1p
+
+XB1 5 6 jj_pi area=0.03 phase_shift=pijj
+Lpi 6 0 0.3p
+
+LP2 5 7 0.1p
+XB2 7 8 jj_0 area=0.07 phase_shift=0
+LP3 8 9 0.1p
+XB3 9 10 jj_0 area=0.07 phase_shift=0
+LP4 10 11 0.1p
+XB4 11 12 jj_0 area=0.07 phase_shift=0
+LP5 12 13 0.1p
+
+IB1 0 5 pwl(0 0 10p 10u)
+.ends
+
+.SUBCKT AND 1 9 22
+
+LIN1 1 2 0.1p
+XB1 2 121 jj_pi area=0.035 phase_shift=pijj
+Lp1 121 0 0.3p
+
+Lp2 2 3 0.1p
+XB2 3 4 jj_0 area=0.12 phase_shift=0
+Lp3 4 5 0.1p
+XB3 5 6 jj_0 area=0.12 phase_shift=0
+Lp4 6 7 0.1p
+XB4 7 8 jj_pi area=0.035 phase_shift=pijj
+
+LIN2 9 10 0.2p
+XB5 10 101 jj_pi area=0.025 phase_shift=pijj
+Lp5 101 0 0.3p
+
+Lp6 10 11 0.1p
+XB6 11 12 jj_0 area=0.12 phase_shift=0
+Lp7 12 13 0.1p
+XB7 13 14 jj_0 area=0.12 phase_shift=0
+Lp8 14 15 0.1p
+XB8 15 8 jj_pi area=0.025 phase_shift=pijj
+
+LP9 8 16 0.1p
+
+XB10 16 161 jj_pi area=0.035 phase_shift=pijj
+LP10 161 0 0.1p
+
+Lp11 16 17 0.1p
+XB12 17 18 jj_0 area=0.075 phase_shift=0
+Lp12 18 19 0.1p
+XB13 19 20 jj_0 area=0.075 phase_shift=0
+Lp13 20 21 0.1p
+XB14 21 22 jj_0 area=0.075 phase_shift=0
+ 
+IB1 0 2 pwl(0 0 10p 1u)
+IB2 0 10 pwl(0 0 10p 1u)
+IB3 0 16 pwl(0 0 10p 5u)
+.ENDS
+
+RNONload 15 0 150ohm
+
+X11 11 1 DCSFQ
+X1  1 2  JTL
+X2  2 3  JTL
+X44 44 4 DCSFQ
+X3  4 5 JTL
+X4  5 6 JTL
+X7 3 6 13 AND
+X8  13 14 JTL
+X9  14 15 JTL
+V11 111 0  PULSE(0.0m  30m   100p   3.0p   3.0p   20.0p   120.0p)
+V1 11 111 PULSE(0.0m  30m   140p   3.0p   3.0p  20.0p   120.0p)
+V2 44 0 PULSE(0.0m  30m   20p   3.0p   3.0p   20.0p   80.0p)
+
+.TRAN 0.2p 500p 200p
+.control
+run
+
+wrdata PiOut.dat v(11) v(44) v(15);v(3) v(6) v(13)
+quit
+
+.endc
+.END
